@@ -3,38 +3,43 @@
     "buildCommand": "npm install",
     "builds": [
       {
-        "src": "server.js",
+        "src": "live-viewer-api/server.js",
         "use": "@vercel/node"
       },
       {
-        "src": "*.html",
+        "src": "live-viewer-api/*.html",
         "use": "@vercel/static"
       },
       {
-        "src": "*.css",
+        "src": "live-viewer-api/*.css",
         "use": "@vercel/static"
       },
       {
-        "src": "*.js",
+        "src": "live-viewer-api/*.js",
         "use": "@vercel/static"
       }
     ],
     "routes": [
       {
         "src": "/api/(.*)",
-        "dest": "server.js"
+        "dest": "live-viewer-api/server.js" 
       },
       {
         "src": "/",
-        "dest": "index.html"
+        "dest": "live-viewer-api/index.html" 
       },
       {
         "src": "/(.+\\.(?:js|css))",
-        "dest": "/$1"
+        "dest": "live-viewer-api/$1" 
       },
       {
         "src": "/(.*)",
-        "dest": "/$1"
+        "dest": "live-viewer-api/$1" 
       }
-    ]
+    ],
+    "env": {
+      "NODE_ENV": "production"
+    },
+    "outputDirectory": "live-viewer-api"
   }
+  
