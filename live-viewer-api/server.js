@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -19,7 +20,7 @@ const server = http.createServer(app);
 // Create WebSocket server
 const wss = new WebSocket.Server({ server });
 
-// Add CORS headers for WebSocket connections (mobile compatibility)
+// Add CORS headers for WebSocket connections
 wss.on('headers', (headers) => {
     headers.push('Access-Control-Allow-Origin: *');
 });
@@ -33,7 +34,7 @@ wss.on('connection', (ws) => {
     viewerCount++;
     broadcastViewerCount();
 
-    // Handle WebSocket messages (ensure it's working well on mobile)
+    // Handle WebSocket messages
     ws.on('message', (message) => {
         console.log(`Received message: ${message}`);
         // Optionally handle messages from clients
@@ -69,7 +70,7 @@ app.get('/viewer-count', (req, res) => {
     res.json({ count: viewerCount });
 });
 
-// Ensure reliable connection updates for mobile by keeping alive
+// Keep WebSocket connections alive by sending pings
 setInterval(() => {
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
