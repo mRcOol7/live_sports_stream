@@ -3,7 +3,7 @@
     "buildCommand": "npm install",
     "builds": [
       {
-        "src": "live-viewer-api/server.js",
+        "src": "live-viewer-api/server.js", 
         "use": "@vercel/node"
       },
       {
@@ -39,7 +39,6 @@
     ],
     "env": {
       "NODE_ENV": "production"
-    },
-    "outputDirectory": "live-viewer-api"
+    }
   }
   
