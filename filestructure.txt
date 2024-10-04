@@ -1,0 +1,13 @@
+|-- .gitignore
+|-- .vercel
+    |-- project.json
+    |-- README.txt
+|-- index.html
+|-- live-viewer-api
+    |-- package-lock.json
+    |-- package.json
+    |-- server.js
+|-- scripts.js
+|-- styles.css
+|-- sw (1).js
+|-- vercel.json
