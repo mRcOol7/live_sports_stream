@@ -1,40 +1,16 @@
 {
-    "version": 2,
-    "buildCommand": "npm install",
-    "builds": [
-      {
-        "src": "server.js",
-        "use": "@vercel/node"
-      },
-      {
-        "src": "*.html",
-        "use": "@vercel/static"
-      },
-      {
-        "src": "*.css",
-        "use": "@vercel/static"
-      },
-      {
-        "src": "*.js",
-        "use": "@vercel/static"
-      }
-    ],
-    "routes": [
-      {
-        "src": "/api/(.*)",
-        "dest": "server.js"
-      },
-      {
-        "src": "/",
-        "dest": "index.html"
-      },
-      {
-        "src": "/(.+\\.(?:js|css))",
-        "dest": "/$1"
-      },
-      {
-        "src": "/(.*)",
-        "dest": "/$1"
-      }
-    ]
-  }
+  "version": 2,
+  "builds": [
+    {
+      "src": "live-viewer-api/server.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "live-viewer-api/server.js"
+    }
+  ],
+  "outputDirectory": "public"
+}
