@@ -123,18 +123,15 @@ function generateRandomId(length = 8) {
 
 // Generate Unique Username
 async function generateUniqueName() {
-    const cricketers = ['SachinTendulkar', 'ViratKohli', 'MSDhoni', 'RohitSharma'];
-    const footballers = ['LionelMessi', 'CristianoRonaldo', 'Neymar', 'Pele'];
+    const players = ['Sachin', 'Ronaldo', 'Messi', 'Kohli', 'Neymar', 'Benzema', 'Dhoni', 'Pele', 'Beckham', 'Zidane'];
 
     let uniqueNameFound = false;
     let uniqueName = '';
 
     while (!uniqueNameFound) {
-        // Randomly choose either a cricketer or a footballer
-        const isCricketer = Math.random() < 0.5; // 50% chance to choose a cricketer
-        uniqueName = isCricketer 
-            ? cricketers[Math.floor(Math.random() * cricketers.length)] 
-            : footballers[Math.floor(Math.random() * footballers.length)];
+        const player = players[Math.floor(Math.random() * players.length)];
+        const sport = Math.random() < 0.5 ? 'Cricketer' : 'Footballer'; // Randomly assign sport
+        uniqueName = `${sport}_${player}`;
 
         const snapshot = await database.ref('userNames').orderByValue().equalTo(uniqueName).once('value');
         if (!snapshot.exists()) {
@@ -194,7 +191,7 @@ database.ref('messages').on('child_added', function(snapshot) {
 // Display Username in Chat
 function displayUserName() {
     const userNameDisplay = document.getElementById('userNameDisplay');
-    userNameDisplay.innerText = `Logged in as: ${userName}`;
+    userNameDisplay.innerHTML = `<span class="username-label">Logged in as:</span> <span class="username">${userName}</span>`;
 }
 
 // Toggle Dark Mode
