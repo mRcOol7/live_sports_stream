@@ -165,7 +165,12 @@ database.ref('messages').on('child_added', function(snapshot) {
 
     const messageElement = document.createElement('div');
     messageElement.className = 'chat-message';
-    messageElement.innerHTML = `<strong>${message.userName}:</strong> ${message.text}`;
+
+    // Sanitize user input using DOMPurify
+    const sanitizedUserName = DOMPurify.sanitize(message.userName);
+    const sanitizedText = DOMPurify.sanitize(message.text);
+
+    messageElement.innerHTML = `<strong>${sanitizedUserName}:</strong> ${sanitizedText}`;
 
     const timestamp = document.createElement('span');
     timestamp.className = 'timestamp';
