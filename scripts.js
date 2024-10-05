@@ -227,12 +227,21 @@ let ws;
 function connectWebSocket() {
     ws = new WebSocket('ws://localhost:3000');
 
-    ws.onopen = () => console.log('WebSocket connection established');
+    ws.onopen = () => {
+        console.log('WebSocket connection established');
+        // Optionally, you can send a welcome message or request for data here
+    };
+
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         updateViewerCountUI(data.count);
     };
-    ws.onclose = () => fallbackToPolling();
+
+    ws.onclose = () => {
+        console.log('WebSocket connection closed. Switching to polling...');
+        fallbackToPolling();
+    };
+
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         fallbackToPolling();
@@ -242,13 +251,21 @@ function connectWebSocket() {
 // Polling Fallback if WebSocket Fails
 function fallbackToPolling() {
     console.log('Switching to polling...');
-    setInterval(updateViewerCount, 10000); // Poll every 10 seconds
+    // Clear existing interval if it exists to prevent multiple intervals
+    if (typeof pollingInterval !== 'undefined') {
+        clearInterval(pollingInterval);
+    }
+    
+    // Poll every 10 seconds
+    pollingInterval = setInterval(updateViewerCount, 10000);
 }
 
 // Fallback Polling for Viewer Count
 async function updateViewerCount() {
     try {
         const response = await fetch('http://localhost:3000/viewer-count');
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        
         const data = await response.json();
         updateViewerCountUI(data.count);
     } catch (error) {
@@ -261,6 +278,10 @@ async function updateViewerCount() {
 function updateViewerCountUI(count) {
     document.getElementById('viewerCount').innerText = `Current Viewers: ${count}`;
 }
+
+// Call connectWebSocket to initiate the WebSocket connection
+connectWebSocket();
+
 function switchPitcher(url) {
     const videoPlayer = document.getElementById('videoPlayer');
     if (videoPlayer) {
