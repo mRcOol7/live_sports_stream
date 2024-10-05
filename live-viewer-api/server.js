@@ -31,9 +31,9 @@ function sanitizeInput(input) {
 
 // Set up rate limiter: maximum of five requests per minute
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 5, // Limit each IP to 5 requests per windowMs
-  message: "Too many requests from this IP, please try again later."
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 5, // Limit each IP to 5 requests per windowMs
+    message: "Too many requests from this IP, please try again later."
 });
 
 // Apply the rate limiter to all requests
@@ -48,6 +48,11 @@ app.use((req, res, next) => {
     next();
 });
 app.use(express.json());
+
+// Define a route for the root path
+app.get('/', (req, res) => {
+    res.send('Welcome to the WebSocket Server!'); // You can customize this response
+});
 
 // Create HTTP server to allow WebSocket and HTTP to share the same port
 const server = http.createServer(app);
@@ -138,6 +143,7 @@ setInterval(() => {
         }
     });
 }, 30000); // Ping every 30 seconds
+
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
