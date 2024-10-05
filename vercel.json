@@ -1,54 +1,15 @@
 {
   "version": 2,
-  "name": "live-viewer-api",
   "builds": [
     {
-      "src": "server.js",
+      "src": "live-viewer-api/server.js",
       "use": "@vercel/node"
-    },
-    {
-      "src": "*.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "*.css",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "scripts.js",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "sw (1).js",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
     {
-      "src": "/ws",
-      "dest": "server.js"
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "server.js"
-    },
-    {
-      "src": "/",
-      "dest": "index.html"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.+\\.(?:js|css))",
-      "dest": "/$1"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/$1"
+      "dest": "live-viewer-api/server.js"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
