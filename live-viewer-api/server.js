@@ -3,10 +3,11 @@ const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
 
+// Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware to handle CORS and JSON
+// Middleware to handle CORS and JSON requests
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -16,56 +17,24 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // Serve static files from the "public" directory
-app.use(express.static(path.join(__dirname, '../public')));
+const publicDir = path.join(__dirname, '../public');
+app.use(express.static(publicDir));
 
-// Send the main index.html file when accessing the root
+// Handle root route and serve index.html
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../public/index.html'));
+    res.sendFile(path.join(publicDir, 'index.html'));
 });
 
-// Create HTTP server
+// Create HTTP server to allow WebSocket and HTTP to share the same port
 const server = http.createServer(app);
 
-// Create WebSocket server
+// Initialize WebSocket server on the same HTTP server
 const wss = new WebSocket.Server({ server });
-
-// Add CORS headers for WebSocket connections
-wss.on('headers', (headers) => {
-    headers.push('Access-Control-Allow-Origin: *');
-});
 
 // Real-time viewer count
 let viewerCount = 0;
 
-// Handle WebSocket connections
-wss.on('connection', (ws) => {
-    console.log('New client connected');
-    viewerCount++;
-    broadcastViewerCount();
-
-    // Handle WebSocket messages
-    ws.on('message', (message) => {
-        console.log(`Received message: ${message}`);
-        // Optionally handle messages from clients
-    });
-
-    // Send initial viewer count upon connection
-    ws.send(JSON.stringify({ count: viewerCount }));
-
-    // Handle disconnection
-    ws.on('close', () => {
-        console.log('Client disconnected');
-        viewerCount--;
-        broadcastViewerCount();
-    });
-
-    // Handle WebSocket errors
-    ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-    });
-});
-
-// Broadcast the viewer count to all connected clients
+// Function to broadcast viewer count to all connected clients
 function broadcastViewerCount() {
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
@@ -74,21 +43,49 @@ function broadcastViewerCount() {
     });
 }
 
-// REST endpoint to get the current viewer count (for initial load)
+// Handle WebSocket connections
+wss.on('connection', (ws) => {
+    console.log('New WebSocket connection established');
+    viewerCount++;
+    broadcastViewerCount();  // Broadcast updated viewer count on new connection
+
+    // Send the initial viewer count to the newly connected client
+    ws.send(JSON.stringify({ count: viewerCount }));
+
+    // Handle incoming WebSocket messages
+    ws.on('message', (message) => {
+        console.log(`Received message: ${message}`);
+        // Handle messages as needed
+    });
+
+    // Handle WebSocket disconnections
+    ws.on('close', () => {
+        console.log('WebSocket client disconnected');
+        viewerCount--;
+        broadcastViewerCount();  // Broadcast updated viewer count on disconnection
+    });
+
+    // Handle WebSocket errors
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+});
+
+// Keep WebSocket connections alive with periodic ping
+setInterval(() => {
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.ping(); // Send ping to keep connection alive
+        }
+    });
+}, 30000); // Send ping every 30 seconds
+
+// REST API endpoint to get the current viewer count (for initial page load)
 app.get('/viewer-count', (req, res) => {
     res.json({ count: viewerCount });
 });
 
-// Keep WebSocket connections alive by sending pings
-setInterval(() => {
-    wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.ping(); // Send ping to keep the connection alive
-        }
-    });
-}, 30000); // Ping every 30 seconds
-
-// Server start
+// Start the HTTP and WebSocket server
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
