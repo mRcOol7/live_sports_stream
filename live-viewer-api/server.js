@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -13,6 +14,14 @@ app.use((req, res, next) => {
     next();
 });
 app.use(express.json());
+
+// Serve static files from the "public" directory
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Send the main index.html file when accessing the root
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/index.html'));
+});
 
 // Create HTTP server
 const server = http.createServer(app);
