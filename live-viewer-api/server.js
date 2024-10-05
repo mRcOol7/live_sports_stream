@@ -11,7 +11,7 @@ const rateLimit = require('express-rate-limit'); // Importing express-rate-limit
 const hpp = require('hpp'); // Importing hpp to protect against HTTP Parameter Pollution
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // Use Helmet to secure HTTP headers
 app.use(helmet());
