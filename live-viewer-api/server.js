@@ -1,13 +1,46 @@
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
+const RateLimit = require('express-rate-limit');
 const path = require('path');
+const DOMPurify = require('dompurify'); // Using DOMPurify to sanitize user input
+const crypto = require('crypto'); // Importing crypto for generating unique names
+const cookie = require('cookie'); // Importing cookie for setting cookies
+const helmet = require('helmet'); // Importing helmet for securing HTTP headers
+const rateLimit = require('express-rate-limit'); // Importing express-rate-limit for rate limiting
+const hpp = require('hpp'); // Importing hpp to protect against HTTP Parameter Pollution
 
-// Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware to handle CORS and JSON requests
+// Use Helmet to secure HTTP headers
+app.use(helmet());
+
+// Function to generate a unique user name
+async function generateUniqueName() {
+    const randomBytes = crypto.randomBytes(4); // Generate 4 bytes of random data
+    const randomSuffix = randomBytes.toString('hex'); // Convert to hexadecimal string
+    return `user-${randomSuffix}`;
+}
+
+// Function to sanitize input
+function sanitizeInput(input) {
+    // Remove special characters or limit allowed characters
+    return input.replace(/[=;]/g, '');
+}
+
+// Set up rate limiter: maximum of five requests per minute
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: "Too many requests from this IP, please try again later."
+});
+
+// Apply the rate limiter to all requests
+app.use(limiter);
+app.use(hpp()); // Protect against HTTP Parameter Pollution
+
+// Middleware to handle CORS and JSON
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -16,53 +49,62 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 
-// Serve static files from the "public" directory
-const publicDir = path.join(__dirname, '../public');
-app.use(express.static(publicDir));
-
-// Handle root route and serve index.html
-app.get('/', (req, res) => {
-    res.sendFile(path.join(publicDir, 'index.html'));
-});
-
 // Create HTTP server to allow WebSocket and HTTP to share the same port
 const server = http.createServer(app);
 
-// Initialize WebSocket server on the same HTTP server
+// Create WebSocket server
 const wss = new WebSocket.Server({ server });
+
+// Add CORS headers for WebSocket connections
+wss.on('headers', (headers) => {
+    headers.push('Access-Control-Allow-Origin: *');
+});
 
 // Real-time viewer count
 let viewerCount = 0;
 
-// Function to broadcast viewer count to all connected clients
-function broadcastViewerCount() {
-    wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ count: viewerCount }));
-        }
-    });
-}
-
 // Handle WebSocket connections
-wss.on('connection', (ws) => {
-    console.log('New WebSocket connection established');
+wss.on('connection', async (ws, req) => {
+    console.log('New client connected');
     viewerCount++;
-    broadcastViewerCount();  // Broadcast updated viewer count on new connection
+    broadcastViewerCount();
 
-    // Send the initial viewer count to the newly connected client
-    ws.send(JSON.stringify({ count: viewerCount }));
+    // Generate a unique name for the user
+    const userName = await generateUniqueName();
 
-    // Handle incoming WebSocket messages
+    // Set a safe cookie for the user
+    const safeName = sanitizeInput(userName);
+    ws.upgradeReq.res.setHeader('Set-Cookie', cookie.serialize(safeName, 'value', {
+        maxAge: 60 * 60 * 24 * 7, // 1 week
+        httpOnly: true, // Helps prevent XSS
+        secure: true, // Set cookies over HTTPS only
+        sameSite: 'Strict' // Prevent CSRF attacks
+    }));
+
+    // Handle WebSocket messages
     ws.on('message', (message) => {
         console.log(`Received message: ${message}`);
-        // Handle messages as needed
+        
+        // Parse the incoming message
+        const parsedMessage = JSON.parse(message);
+        
+        // Create a message element for chat display
+        const messageElement = document.createElement('div');
+        messageElement.className = 'chat-message';
+        messageElement.innerHTML = `<strong>${DOMPurify.sanitize(userName)}:</strong> ${DOMPurify.sanitize(parsedMessage.text)}`; // Sanitize user input
+
+        // Now append `messageElement` to the DOM wherever it's needed
+        document.getElementById('chatContainer').appendChild(messageElement);
     });
 
-    // Handle WebSocket disconnections
+    // Send initial viewer count upon connection
+    ws.send(JSON.stringify({ count: viewerCount }));
+
+    // Handle disconnection
     ws.on('close', () => {
-        console.log('WebSocket client disconnected');
+        console.log('Client disconnected');
         viewerCount--;
-        broadcastViewerCount();  // Broadcast updated viewer count on disconnection
+        broadcastViewerCount();
     });
 
     // Handle WebSocket errors
@@ -71,21 +113,30 @@ wss.on('connection', (ws) => {
     });
 });
 
-// Keep WebSocket connections alive with periodic ping
-setInterval(() => {
+// Broadcast the viewer count to all connected clients
+function broadcastViewerCount() {
     wss.clients.forEach((client) => {
         if (client.readyState === WebSocket.OPEN) {
-            client.ping(); // Send ping to keep connection alive
+            client.send(JSON.stringify({ count: viewerCount }));
         }
     });
-}, 30000); // Send ping every 30 seconds
+}
 
-// REST API endpoint to get the current viewer count (for initial page load)
+// REST endpoint to get the current viewer count (for initial load)
 app.get('/viewer-count', (req, res) => {
     res.json({ count: viewerCount });
 });
 
-// Start the HTTP and WebSocket server
+// Keep WebSocket connections alive by sending pings
+setInterval(() => {
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.ping(); // Send ping to keep the connection alive
+        }
+    });
+}, 30000); // Ping every 30 seconds
+
+// Server start
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
