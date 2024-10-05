@@ -18,6 +18,16 @@ const database = firebase.database();
 let userId = localStorage.getItem('userId') || generateRandomId();
 let userName = localStorage.getItem('userName');
 
+async function generateUniqueName() {
+    // Generate a cryptographically secure random number
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    
+    // Convert the random number to a string and append it to a prefix
+    const randomSuffix = array[0].toString(36); // Base-36 for alphanumeric characters
+    return `user-${randomSuffix}`;
+}
+
 async function assignUserName() {
     if (!userName) {
         userName = await generateUniqueName();
@@ -121,29 +131,6 @@ function generateRandomId(length = 8) {
     return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
 }
 
-// Generate Unique Username
-async function generateUniqueName() {
-    const adjectives = ['Quick', 'Lazy', 'Happy', 'Bright'];
-    const animals = ['Fox', 'Dog', 'Cat', 'Lion'];
-
-    let uniqueNameFound = false;
-    let uniqueName = '';
-
-    while (!uniqueNameFound) {
-        const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
-        const animal = animals[Math.floor(Math.random() * animals.length)];
-        uniqueName = `${adjective}${animal}`;
-
-        const snapshot = await database.ref('userNames').orderByValue().equalTo(uniqueName).once('value');
-        if (!snapshot.exists()) {
-            uniqueNameFound = true;
-        }
-    }
-
-    await database.ref('userNames').push(uniqueName);
-    return uniqueName;
-}
-
 // Save Chat History Locally (Cross-browser support)
 function saveChatHistory() {
     const chatMessages = document.getElementById('chatMessages').innerHTML;
@@ -178,7 +165,12 @@ database.ref('messages').on('child_added', function(snapshot) {
 
     const messageElement = document.createElement('div');
     messageElement.className = 'chat-message';
-    messageElement.innerHTML = `<strong>${message.userName}:</strong> ${message.text}`;
+
+    // Sanitize user input using DOMPurify
+    const sanitizedUserName = DOMPurify.sanitize(message.userName);
+    const sanitizedText = DOMPurify.sanitize(message.text);
+
+    messageElement.innerHTML = `<strong>${sanitizedUserName}:</strong> ${sanitizedText}`;
 
     const timestamp = document.createElement('span');
     timestamp.className = 'timestamp';
@@ -192,7 +184,7 @@ database.ref('messages').on('child_added', function(snapshot) {
 // Display Username in Chat
 function displayUserName() {
     const userNameDisplay = document.getElementById('userNameDisplay');
-    userNameDisplay.innerText = `Logged in as: ${userName}`;
+    userNameDisplay.innerHTML = `<span class="username-label">Logged in as:</span> <span class="username">${userName}</span>`;
 }
 
 // Toggle Dark Mode
@@ -233,14 +225,23 @@ function toggleFullScreen() {
 let ws;
 
 function connectWebSocket() {
-    ws = new WebSocket('ws://localhost:3000');
+    ws = new WebSocket('ws://localhost:10000');
 
-    ws.onopen = () => console.log('WebSocket connection established');
+    ws.onopen = () => {
+        console.log('WebSocket connection established');
+        // Optionally, you can send a welcome message or request for data here
+    };
+
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         updateViewerCountUI(data.count);
     };
-    ws.onclose = () => fallbackToPolling();
+
+    ws.onclose = () => {
+        console.log('WebSocket connection closed. Switching to polling...');
+        fallbackToPolling();
+    };
+
     ws.onerror = (error) => {
         console.error('WebSocket error:', error);
         fallbackToPolling();
@@ -250,13 +251,21 @@ function connectWebSocket() {
 // Polling Fallback if WebSocket Fails
 function fallbackToPolling() {
     console.log('Switching to polling...');
-    setInterval(updateViewerCount, 10000); // Poll every 10 seconds
+    // Clear existing interval if it exists to prevent multiple intervals
+    if (typeof pollingInterval !== 'undefined') {
+        clearInterval(pollingInterval);
+    }
+    
+    // Poll every 10 seconds
+    pollingInterval = setInterval(updateViewerCount, 10000);
 }
 
 // Fallback Polling for Viewer Count
 async function updateViewerCount() {
     try {
-        const response = await fetch('http://localhost:3000/viewer-count');
+        const response = await fetch('http://localhost:10000/viewer-count');
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+        
         const data = await response.json();
         updateViewerCountUI(data.count);
     } catch (error) {
@@ -269,6 +278,10 @@ async function updateViewerCount() {
 function updateViewerCountUI(count) {
     document.getElementById('viewerCount').innerText = `Current Viewers: ${count}`;
 }
+
+// Call connectWebSocket to initiate the WebSocket connection
+connectWebSocket();
+
 function switchPitcher(url) {
     const videoPlayer = document.getElementById('videoPlayer');
     if (videoPlayer) {

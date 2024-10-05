@@ -1,13 +1,13 @@
 {
   "name": "live-viewer-api",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "live-viewer-api/server.js",
   "engines": {
     "node": ">=18.x"
   },
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node live-viewer-api/server.js",
+    "dev": "nodemon live-viewer-api/server.js",
     "vercel-build": "echo Building...",
     "deploy": "vercel deploy --prod"
   },
@@ -19,9 +19,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.13.0",
-    "socket.io": "^4.7.2"
+    "cookie": "^0.7.1",
+    "dompurify": "^3.1.7",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "hpp": "^0.2.3",
+    "socket.io": "^4.7.2",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",

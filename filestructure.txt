@@ -1,13 +1,21 @@
+|-- .firebase
+    |-- hosting.cHVibGlj.cache
+|-- .firebaserc
 |-- .gitignore
 |-- .vercel
     |-- project.json
     |-- README.txt
+|-- database.rules.json
+|-- firebase.json
 |-- index.html
 |-- live-viewer-api
     |-- package-lock.json
     |-- package.json
     |-- server.js
+|-- Procfile
+|-- public
 |-- scripts.js
+|-- server.js
 |-- styles.css
 |-- sw (1).js
 |-- vercel.json

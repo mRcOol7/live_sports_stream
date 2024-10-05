@@ -433,15 +433,15 @@ iframe {
 }
 
 .user-name-display {
-    font-size: 1.2em;
+    font-size: 1.5em; /* Increased font size */
     font-weight: bold;
-    color: #333;
-    margin-bottom: 10px;
+    color: #ffffff; /* Changed text color to white for better contrast */
+    margin-bottom: 15px; /* Increased margin for spacing */
     text-align: center;
-    padding: 10px;
-    background-color: #f0f0f0;
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    padding: 15px; /* Increased padding for better spacing */
+    background-color: #333333; /* Darker background for contrast */
+    border-radius: 10px; /* Increased border-radius for a smoother look */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2); /* Enhanced shadow for depth */
 }
 .viewer-count {
     position: absolute;
