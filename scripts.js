@@ -225,7 +225,7 @@ function toggleFullScreen() {
 let ws;
 
 function connectWebSocket() {
-    ws = new WebSocket('ws://localhost:3000');
+    ws = new WebSocket('ws://localhost:10000');
 
     ws.onopen = () => {
         console.log('WebSocket connection established');
