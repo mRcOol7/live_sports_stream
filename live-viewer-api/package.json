@@ -7,9 +7,10 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "vercel-build": "echo Building...",
-    "deploy": "vercel deploy --prod"
+    "dev": "nodemon server.js",  
+    "build": "echo 'No build required'",  
+    "vercel-build": "npm run build",  
+    "deploy": "vercel deploy --prod"  
   },
   "keywords": [
     "live-viewer",
