@@ -126,7 +126,7 @@ Follow these steps to run the project locally:
 - **Automatic Activation**: PiP mode activates automatically when you minimize or switch tabs.
 - **Manual Activation**: You can also enable it manually by right-clicking on the video (in supported browsers).
 
-Feel free to copy and paste this formatted guide for display. Let me know if you need any further adjustments or additions!
+Let me know if you need any further adjustments or additions!
 
 ---
 
