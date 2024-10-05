@@ -1,3 +1,4 @@
+const functions = require('firebase-functions');
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -135,8 +136,8 @@ setInterval(() => {
         }
     });
 }, 30000); // Ping every 30 seconds
-
-// Server start
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
+// Export the app as a Firebase function
+exports.api = functions.https.onRequest(app);
