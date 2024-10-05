@@ -263,7 +263,7 @@ function fallbackToPolling() {
 // Fallback Polling for Viewer Count
 async function updateViewerCount() {
     try {
-        const response = await fetch('http://localhost:3000/viewer-count');
+        const response = await fetch('http://localhost:10000/viewer-count');
         if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
         
         const data = await response.json();
