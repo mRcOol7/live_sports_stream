@@ -1,4 +1,3 @@
-const functions = require('firebase-functions');
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
@@ -70,17 +69,20 @@ wss.on('connection', async (ws, req) => {
     viewerCount++;
     broadcastViewerCount();
 
+    const cookies = cookie.parse(req.headers.cookie || '');
+    const safeName = 'yourCookieName'; // Replace with your actual cookie name
+
+    // Set a new cookie
+    const newCookie = cookie.serialize(safeName, 'value', {
+        httpOnly: true,
+        maxAge: 60 * 60 * 24 * 7 // 1 week
+    });
+
+    // Add the new cookie to the response headers
+    ws.send(`Set-Cookie: ${newCookie}`);
+
     // Generate a unique name for the user
     const userName = await generateUniqueName();
-
-    // Set a safe cookie for the user
-    const safeName = sanitizeInput(userName);
-    ws.upgradeReq.res.setHeader('Set-Cookie', cookie.serialize(safeName, 'value', {
-        maxAge: 60 * 60 * 24 * 7, // 1 week
-        httpOnly: true, // Helps prevent XSS
-        secure: true, // Set cookies over HTTPS only
-        sameSite: 'Strict' // Prevent CSRF attacks
-    }));
 
     // Handle WebSocket messages
     ws.on('message', (message) => {
@@ -139,5 +141,3 @@ setInterval(() => {
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
-// Export the app as a Firebase function
-exports.api = functions.https.onRequest(app);
