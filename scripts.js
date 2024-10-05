@@ -18,6 +18,16 @@ const database = firebase.database();
 let userId = localStorage.getItem('userId') || generateRandomId();
 let userName = localStorage.getItem('userName');
 
+async function generateUniqueName() {
+    // Generate a cryptographically secure random number
+    const array = new Uint32Array(1);
+    window.crypto.getRandomValues(array);
+    
+    // Convert the random number to a string and append it to a prefix
+    const randomSuffix = array[0].toString(36); // Base-36 for alphanumeric characters
+    return `user-${randomSuffix}`;
+}
+
 async function assignUserName() {
     if (!userName) {
         userName = await generateUniqueName();
@@ -119,28 +129,6 @@ chatInput.addEventListener('keydown', function(event) {
 function generateRandomId(length = 8) {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
-}
-
-// Generate Unique Username
-async function generateUniqueName() {
-    const players = ['Sachin', 'Ronaldo', 'Messi', 'Kohli', 'Neymar', 'Benzema', 'Dhoni', 'Pele', 'Beckham', 'Zidane'];
-
-    let uniqueNameFound = false;
-    let uniqueName = '';
-
-    while (!uniqueNameFound) {
-        const player = players[Math.floor(Math.random() * players.length)];
-        const sport = Math.random() < 0.5 ? 'Cricketer' : 'Footballer'; // Randomly assign sport
-        uniqueName = `${sport}_${player}`;
-
-        const snapshot = await database.ref('userNames').orderByValue().equalTo(uniqueName).once('value');
-        if (!snapshot.exists()) {
-            uniqueNameFound = true;
-        }
-    }
-
-    await database.ref('userNames').push(uniqueName);
-    return uniqueName;
 }
 
 // Save Chat History Locally (Cross-browser support)
