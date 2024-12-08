@@ -78,16 +78,31 @@ function sanitizeInput(input) {
     return sanitized;
 }
 
-// Set up rate limiter: maximum of five requests per minute
+// Set up rate limiter with more lenient settings
 const limiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minute
-    max: 5, // Limit each IP to 5 requests per windowMs
-    message: "Too many requests from this IP, please try again later."
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: "Too many requests, please try again in a minute.",
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false // Disable the `X-RateLimit-*` headers
 });
 
 // Apply the rate limiter to all requests
 app.use(limiter);
 app.use(hpp()); // Protect against HTTP Parameter Pollution
+
+// Handle favicon.ico requests
+app.get('/favicon.ico', (req, res) => {
+    res.status(204).end(); // No content response
+});
+
+// Add rate limit error monitoring
+app.use((err, req, res, next) => {
+    if (err instanceof Error && err.status === 429) {
+        console.error(`Rate limit exceeded for IP: ${req.ip}`);
+    }
+    next(err);
+});
 
 // Middleware to handle CORS and JSON
 app.use((req, res, next) => {
@@ -109,6 +124,7 @@ const server = http.createServer(app);
 // Create WebSocket server
 const wss = new WebSocket.Server({ 
     server,
+    path: '/ws',
     verifyClient: (info) => {
         const origin = info.origin || info.req.headers.origin;
         if (origin === FRONTEND_URL) {

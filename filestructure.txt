@@ -1,6 +1,10 @@
 |-- .firebase
     |-- hosting.cHVibGlj.cache
 |-- .firebaserc
+|-- .github
+    |-- workflows
+        |-- manual.yml
+        |-- npm-publish-github-packages.yml
 |-- .gitignore
 |-- .vercel
     |-- project.json
@@ -14,7 +18,9 @@
     |-- server.js
 |-- Procfile
 |-- public
+|-- README.md
 |-- scripts.js
+|-- SECURITY.md
 |-- server.js
 |-- styles.css
 |-- sw (1).js
