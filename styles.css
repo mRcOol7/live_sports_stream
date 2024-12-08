@@ -336,6 +336,50 @@ iframe {
     to { opacity: 1; }
 }
 
+.username-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    margin: 10px 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.username {
+    font-size: 1rem;
+    color: #ffcc00;
+    text-shadow: 0 0 5px rgba(255, 204, 0, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+@media (max-width: 767px) {
+    .username-container {
+        padding: 6px 10px;
+        margin: 8px 0;
+    }
+
+    .username {
+        font-size: 0.9rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .username-container {
+        padding: 4px 8px;
+        margin: 6px 0;
+    }
+
+    .username {
+        font-size: 0.85rem;
+    }
+}
+
 @media (max-width: 768px) {
     .chat-container {
         height: calc(100vh - 200px);
