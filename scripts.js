@@ -1,43 +1,645 @@
-// Firebase Configuration
-const firebaseConfig = {
-    apiKey: process.env.FIREBASE_API_KEY,
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-    databaseURL: process.env.FIREBASE_DATABASE_URL,
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.FIREBASE_APP_ID,
-    measurementId: process.env.FIREBASE_MEASUREMENT_ID
-};
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+// Initialize Firebase with config from config.js
+firebase.initializeApp(window.firebaseConfig);
 const database = firebase.database();
+
+// Reference to viewers in Firebase
+const viewersRef = database.ref('viewers');
+let myViewerRef;
+
+// Setup viewer count tracking
+database.ref('.info/connected').on('value', (snap) => {
+    if (snap.val() === true) {
+        // We're connected (or reconnected)
+        // Add this device to viewers list
+        myViewerRef = viewersRef.push();
+
+        // When this device disconnects, remove it
+        myViewerRef.onDisconnect().remove();
+
+        // Add this device to the viewers list
+        myViewerRef.set(true);
+        
+        console.log('Connected to Firebase, tracking viewer count');
+    }
+});
+
+// Listen for viewer count changes
+viewersRef.on('value', (snapshot) => {
+    const viewers = snapshot.numChildren();
+    const viewerCountElement = document.getElementById('viewerCount');
+    if (viewerCountElement) {
+        viewerCountElement.textContent = viewers;
+        console.log('Updated viewer count:', viewers);
+    }
+});
+
+// User Management System with Local Storage
+class UserManager {
+    constructor() {
+        this.userId = localStorage.getItem('userId') || this.generateUserId();
+        this.userName = localStorage.getItem('userName') || this.generateRandomUsername();
+        this.userRef = database.ref(`users/${this.userId}`);
+        this.setupUserPresence();
+    }
+
+    generateUserId() {
+        const newUserId = 'user_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('userId', newUserId);
+        return newUserId;
+    }
+
+    generateRandomUsername() {
+        const name = 'User_' + Math.floor(Math.random() * 10000);
+        localStorage.setItem('userName', name);
+        return name;
+    }
+
+    async setUsername(name) {
+        if (!name) name = this.generateRandomUsername();
+        this.userName = name;
+        localStorage.setItem('userName', name);
+        
+        try {
+            await this.userRef.set({
+                userName: name,
+                lastSeen: firebase.database.ServerValue.TIMESTAMP,
+                isOnline: true
+            });
+            
+            const userNameDisplay = document.getElementById('userNameDisplay');
+            if (userNameDisplay) {
+                userNameDisplay.textContent = `Chatting as: ${name}`;
+            }
+        } catch (error) {
+            console.error('Error updating username:', error);
+        }
+    }
+
+    setupUserPresence() {
+        const connectedRef = database.ref('.info/connected');
+        
+        connectedRef.on('value', async (snap) => {
+            if (snap.val() === true) {
+                try {
+                    await this.userRef.onDisconnect().update({
+                        isOnline: false,
+                        lastSeen: firebase.database.ServerValue.TIMESTAMP
+                    });
+
+                    await this.userRef.update({
+                        isOnline: true,
+                        lastSeen: firebase.database.ServerValue.TIMESTAMP
+                    });
+                } catch (error) {
+                    console.error('Error in presence system:', error);
+                }
+            }
+        });
+    }
+}
+
+// Message Management System
+class MessageManager {
+    constructor(userManager) {
+        this.userManager = userManager;
+        this.messagesRef = database.ref('messages');
+        this.messageCache = new Map();
+        this.setupMessageListeners();
+    }
+
+    async sendMessage(text) {
+        if (!text.trim()) return;
+
+        const messageData = {
+            userId: this.userManager.userId,
+            userName: this.userManager.userName,
+            message: DOMPurify.sanitize(processMessage(text)),
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            edited: false
+        };
+
+        try {
+            const newMessageRef = this.messagesRef.push();
+            await newMessageRef.set(messageData);
+            return newMessageRef.key;
+        } catch (error) {
+            console.error('Error sending message:', error);
+            throw error;
+        }
+    }
+
+    setupMessageListeners() {
+        this.messagesRef.orderByChild('timestamp').limitToLast(100).on('child_added', 
+            (snapshot) => {
+                try {
+                    const message = snapshot.val();
+                    this.messageCache.set(snapshot.key, message);
+                    displayMessage(message, snapshot.key);
+                } catch (error) {
+                    console.error('Error in message listener:', error);
+                }
+            }
+        );
+
+        this.messagesRef.on('child_changed', (snapshot) => {
+            const message = snapshot.val();
+            this.messageCache.set(snapshot.key, message);
+            updateMessageInUI(message, snapshot.key);
+        });
+
+        this.messagesRef.on('child_removed', (snapshot) => {
+            this.messageCache.delete(snapshot.key);
+            removeMessageFromUI(snapshot.key);
+        });
+    }
+}
+
+// Initialize managers
+let userManager;
+let messageManager;
+
+// Enhanced message display with animations
+function displayMessage(data, messageId) {
+    const messagesDiv = document.getElementById('chatMessages');
+    if (!messagesDiv) return;
+
+    const messageElement = document.createElement('div');
+    messageElement.className = `message ${data.userId === userManager.userId ? 'self' : ''}`;
+    messageElement.setAttribute('data-message-id', messageId);
+
+    const timestamp = new Date(data.timestamp).toLocaleTimeString();
+    const isEdited = data.edited ? '<span class="edited-indicator">(edited)</span>' : '';
+    
+    messageElement.innerHTML = `
+        <div class="message-header">
+            <strong class="username">${DOMPurify.sanitize(data.userName)}</strong>
+            <span class="timestamp">${timestamp}</span>
+        </div>
+        <div class="message-content">${DOMPurify.sanitize(data.message)}</div>
+        ${isEdited}
+    `;
+
+    // Add message controls for user's own messages
+    if (data.userId === userManager.userId) {
+        const controls = document.createElement('div');
+        controls.className = 'message-controls';
+        controls.innerHTML = `
+            <button class="edit-message" title="Edit message">✏️</button>
+            <button class="delete-message" title="Delete message">🗑️</button>
+        `;
+
+        // Add event listeners for edit and delete
+        controls.querySelector('.edit-message').addEventListener('click', () => {
+            const content = messageElement.querySelector('.message-content');
+            const currentText = content.textContent;
+            content.innerHTML = `
+                <input type="text" class="edit-input" value="${currentText}">
+                <button class="save-edit">Save</button>
+                <button class="cancel-edit">Cancel</button>
+            `;
+
+            const editInput = content.querySelector('.edit-input');
+            editInput.focus();
+
+            content.querySelector('.save-edit').addEventListener('click', async () => {
+                const newText = editInput.value.trim();
+                if (newText && newText !== currentText) {
+                    await messageManager.editMessage(messageId, newText);
+                }
+                updateMessageInUI({ ...data, message: newText, edited: true }, messageId);
+            });
+
+            content.querySelector('.cancel-edit').addEventListener('click', () => {
+                updateMessageInUI(data, messageId);
+            });
+        });
+
+        controls.querySelector('.delete-message').addEventListener('click', async () => {
+            if (confirm('Are you sure you want to delete this message?')) {
+                await messageManager.deleteMessage(messageId);
+            }
+        });
+
+        messageElement.appendChild(controls);
+    }
+
+    // Add hover effect to show timestamp
+    messageElement.addEventListener('mouseenter', () => {
+        const timestamp = messageElement.querySelector('.timestamp');
+        if (timestamp) timestamp.style.opacity = '1';
+    });
+
+    messageElement.addEventListener('mouseleave', () => {
+        const timestamp = messageElement.querySelector('.timestamp');
+        if (timestamp) timestamp.style.opacity = '0';
+    });
+
+    // Add message with animation
+    messageElement.style.opacity = '0';
+    messagesDiv.appendChild(messageElement);
+    requestAnimationFrame(() => {
+        messageElement.style.opacity = '1';
+        messageElement.style.transform = 'translateX(0)';
+    });
+
+    scrollToBottom();
+}
+
+function updateMessageInUI(message, messageId) {
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageElement) {
+        const messageContent = messageElement.querySelector('.message-content');
+        if (messageContent) {
+            messageContent.innerHTML = DOMPurify.sanitize(message.message);
+            if (message.edited) {
+                const editedSpan = document.createElement('span');
+                editedSpan.className = 'edited-indicator';
+                editedSpan.textContent = ' (edited)';
+                messageContent.appendChild(editedSpan);
+            }
+        }
+    }
+}
+
+function removeMessageFromUI(messageId) {
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageElement) {
+        messageElement.remove();
+    }
+}
+
+// Initialize Firebase and managers
+function initializeApp() {
+    try {
+        if (!firebase.apps.length) {
+            firebase.initializeApp(window.firebaseConfig);
+        }
+        window.database = firebase.database();
+        userManager = new UserManager();
+        messageManager = new MessageManager(userManager);
+        
+        userManager.setUsername(localStorage.getItem('userName'));
+        initializeChat();
+        initializeDarkMode();
+    } catch (error) {
+        console.error('Error initializing app:', error);
+    }
+}
+
+// Initialize everything when DOM is loaded
+document.addEventListener('DOMContentLoaded', initializeApp);
+
+// Live Count Manager
+class LiveCountManager {
+    constructor() {
+        this.viewersRef = database.ref('viewers');
+        this.setupViewerCount();
+    }
+
+    setupViewerCount() {
+        const connectedRef = database.ref('.info/connected');
+        
+        connectedRef.on('value', (snap) => {
+            if (snap.val() === true) {
+                const myViewerRef = this.viewersRef.push();
+                
+                myViewerRef.onDisconnect().remove();
+                myViewerRef.set({
+                    userId: userManager.userId,
+                    userName: userManager.userName,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        });
+
+        this.viewersRef.on('value', (snapshot) => {
+            const viewers = snapshot.numChildren();
+            this.updateViewerCount(viewers);
+        });
+    }
+
+    updateViewerCount(count) {
+        const viewerCountElement = document.getElementById('viewerCount');
+        if (viewerCountElement) {
+            viewerCountElement.textContent = count;
+            viewerCountElement.setAttribute('title', `${count} ${count === 1 ? 'viewer' : 'viewers'} online`);
+        }
+    }
+}
+
+// Initialize Live Count Manager
+const liveCountManager = new LiveCountManager();
 
 // User ID and Name Management
 let userId = localStorage.getItem('userId') || generateRandomId();
 let userName = localStorage.getItem('userName');
+let isTyping = false;
 
-async function generateUniqueName() {
-    // Generate a cryptographically secure random number
-    const array = new Uint32Array(1);
-    window.crypto.getRandomValues(array);
-    
-    // Convert the random number to a string and append it to a prefix
-    const randomSuffix = array[0].toString(36); // Base-36 for alphanumeric characters
-    return `user-${randomSuffix}`;
+function getUserId() {
+    return userId;
+}
+
+function generateRandomId(length = 8) {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+}
+
+function generateRandomUsername() {
+    const adjectives = [
+        'Swift', 'Mighty', 'Epic', 'Cool', 'Super', 'Mega', 'Ultra', 'Pro',
+        'Elite', 'Royal', 'Master', 'Legend', 'Rapid', 'Brave', 'Noble'
+    ];
+    const nouns = [
+        'Player', 'Warrior', 'Champion', 'Knight', 'Striker', 'Titan', 'Phoenix',
+        'Dragon', 'Eagle', 'Lion', 'Tiger', 'Ninja', 'Wizard', 'Hero'
+    ];
+    const randomNumber = Math.floor(Math.random() * 999) + 1;
+    const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    return `${adjective}${noun}${randomNumber}`;
 }
 
 async function assignUserName() {
     if (!userName) {
-        userName = await generateUniqueName();
+        userName = generateRandomUsername();
         localStorage.setItem('userName', userName);
     }
-    displayUserName();
+    const userNameDisplay = document.getElementById('userNameDisplay');
+    if (userNameDisplay) {
+        userNameDisplay.textContent = `Chatting as: ${userName}`;
+    }
+    console.log('Username assigned:', userName);
 }
 
 // Save User ID to Local Storage
 localStorage.setItem('userId', userId);
+
+// Message sending lock to prevent duplicate sends
+let isSending = false;
+
+// Enhanced message sending with emojis and markdown support
+async function sendMessage() {
+    if (isSending) return; // Prevent duplicate sends
+    
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    
+    if (message) {
+        isSending = true;
+        const username = userName || localStorage.getItem('username') || generateRandomUsername();
+        
+        try {
+            // Process message for markdown and emojis
+            const processedMessage = processMessage(message);
+            
+            const messageData = {
+                username: username,
+                message: DOMPurify.sanitize(processedMessage),
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                userId: getUserId()
+            };
+
+            // Push message to Firebase
+            await database.ref('messages').push().set(messageData);
+            
+            // Clear input and update UI only after successful send
+            input.value = '';
+            scrollToBottom();
+            updateTypingStatus(false);
+            
+        } catch (error) {
+            console.error('Error sending message:', error);
+        } finally {
+            isSending = false;
+        }
+    }
+}
+
+// Process message for markdown and emojis
+function processMessage(message) {
+    // Basic markdown support
+    message = message.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                    .replace(/`(.*?)`/g, '<code>$1</code>');
+    
+    // Basic emoji support - using string replace instead of RegExp
+    const emojiMap = {
+        ':\\)': '😊',
+        ':D': '😃',
+        ':\\(': '😢',
+        '<3': '❤️',
+        ':p': '😛',
+        ';\\)': '😉',
+        ':o': '😮',
+        ':>': '😆',
+        ':\\|': '😐'
+    };
+    
+    // Replace emojis using escaped patterns
+    for (let [pattern, emoji] of Object.entries(emojiMap)) {
+        message = message.replace(new RegExp(pattern, 'g'), emoji);
+    }
+    
+    return DOMPurify.sanitize(message);
+}
+
+// Function to handle Enter key in chat input
+function checkEnter(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+// Debounce function to prevent rapid firing
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Typing indicator functions
+const debouncedTypingStatus = debounce((isTyping) => {
+    const typingRef = database.ref('typing/' + getUserId());
+    if (isTyping) {
+        typingRef.set({
+            username: userName,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+    } else {
+        typingRef.remove();
+    }
+}, 500);
+
+function handleTyping() {
+    if (!isTyping) {
+        isTyping = true;
+    }
+    debouncedTypingStatus(true);
+    
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+        isTyping = false;
+        debouncedTypingStatus(false);
+    }, 2000);
+}
+
+// Remove any existing listeners before adding new ones
+const chatInput = document.getElementById('chatInput');
+if (chatInput) {
+    chatInput.removeEventListener('input', handleTyping);
+    chatInput.removeEventListener('keypress', checkEnter);
+    
+    // Add new listeners
+    chatInput.addEventListener('input', handleTyping);
+    chatInput.addEventListener('keypress', checkEnter);
+}
+
+// Enhanced message display with animations
+function displayMessage(data) {
+    const messagesDiv = document.getElementById('chatMessages');
+    const messageElement = document.createElement('div');
+    const isCurrentUser = data.userId === getUserId();
+    
+    messageElement.className = `message ${isCurrentUser ? 'self' : ''}`;
+    messageElement.innerHTML = `
+        <strong>${data.username}</strong>
+        ${data.message}
+        <span class="timestamp">${data.timestamp}</span>
+    `;
+    
+    messagesDiv.appendChild(messageElement);
+    scrollToBottom();
+    
+    // Add entrance animation
+    messageElement.style.opacity = '0';
+    messageElement.style.transform = 'translateY(20px)';
+    requestAnimationFrame(() => {
+        messageElement.style.transition = 'all 0.3s ease';
+        messageElement.style.opacity = '1';
+        messageElement.style.transform = 'translateY(0)';
+    });
+}
+
+// Improved typing indicator
+let typingTimeout;
+function updateTypingStatus(isTyping) {
+    const userId = getUserId();
+    const username = localStorage.getItem('username');
+    const typingRef = firebase.database().ref('typing/' + userId);
+    
+    if (isTyping) {
+        typingRef.set({
+            username: username,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+        
+        // Clear typing status after 2 seconds of no typing
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            typingRef.remove();
+        }, 2000);
+    } else {
+        typingRef.remove();
+    }
+}
+
+// Show typing indicators
+function showTypingIndicators(snapshot) {
+    const typingIndicator = document.getElementById('typingIndicator');
+    const typingUsers = [];
+    
+    snapshot.forEach(child => {
+        const typing = child.val();
+        if (child.key !== getUserId()) {
+            typingUsers.push(typing.username);
+        }
+    });
+    
+    if (typingUsers.length > 0) {
+        let text = '';
+        if (typingUsers.length === 1) {
+            text = `${typingUsers[0]} is typing...`;
+        } else if (typingUsers.length === 2) {
+            text = `${typingUsers[0]} and ${typingUsers[1]} are typing...`;
+        } else {
+            text = 'Several people are typing...';
+        }
+        typingIndicator.textContent = text;
+        typingIndicator.style.display = 'block';
+    } else {
+        typingIndicator.style.display = 'none';
+    }
+}
+
+// Smooth scroll to bottom
+function scrollToBottom() {
+    const messagesDiv = document.getElementById('chatMessages');
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// Initialize chat features
+function initializeChat() {
+    const chatInput = document.getElementById('chatInput');
+    const sendButton = document.querySelector('.send-btn');
+    
+    // Event listeners
+    chatInput.addEventListener('input', () => {
+        updateTypingStatus(true);
+    });
+    
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    sendButton.addEventListener('click', sendMessage);
+    
+    // Firebase listeners
+    const messagesRef = firebase.database().ref('messages');
+    const typingRef = firebase.database().ref('typing');
+    
+    messagesRef.on('child_added', snapshot => {
+        displayMessage(snapshot.val());
+    });
+    
+    typingRef.on('value', snapshot => {
+        showTypingIndicators(snapshot);
+    });
+    
+    // Clear typing status on page unload
+    window.addEventListener('beforeunload', () => {
+        const userId = getUserId();
+        firebase.database().ref('typing/' + userId).remove();
+    });
+}
+
+// Initialize dark mode
+function initializeDarkMode() {
+    const darkMode = localStorage.getItem('darkMode') === 'true';
+    document.body.classList.toggle('dark-mode', darkMode);
+    
+    // Add dark mode toggle button
+    const darkModeToggle = document.createElement('button');
+    darkModeToggle.className = 'dark-mode-toggle';
+    darkModeToggle.innerHTML = darkMode ? '☀️' : '🌙';
+    document.body.appendChild(darkModeToggle);
+    
+    darkModeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+        const isDarkMode = document.body.classList.contains('dark-mode');
+        localStorage.setItem('darkMode', isDarkMode);
+        darkModeToggle.innerHTML = isDarkMode ? '☀️' : '🌙';
+    });
+}
 
 // Clear Chat History on Page Load
 function clearChatHistory() {
@@ -52,12 +654,10 @@ window.addEventListener('load', () => {
     clearChatHistory();
     assignUserName();
     loadChatHistory(); // Load chat history for both mobile and desktop
-    connectWebSocket(); // Initialize WebSocket connection
 });
 
 // Responsive Typing Indicator Management for Desktop and Mobile
-let isTyping = false;
-let typingTimeout;
+let typingIndicator;
 
 function showTypingIndicator(show) {
     const typingIndicator = document.getElementById('typingIndicator');
@@ -65,24 +665,6 @@ function showTypingIndicator(show) {
 }
 
 // Typing Indicator Event Listener
-const chatInput = document.getElementById('chatInput');
-chatInput.addEventListener('input', () => {
-    if (!isTyping) {
-        isTyping = true;
-        database.ref('typing').set({ userId, userName });
-        showTypingIndicator(true);
-    }
-
-    // Clear previous timeout and set a new one
-    clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-        isTyping = false;
-        database.ref('typing').set(null);
-        showTypingIndicator(false);
-    }, 2000);
-});
-
-// Firebase Typing Listener
 database.ref('typing').on('value', (snapshot) => {
     const typingData = snapshot.val();
     showTypingIndicator(!!typingData);
@@ -90,46 +672,6 @@ database.ref('typing').on('value', (snapshot) => {
         document.getElementById('typingIndicator').innerText = `${typingData.userName} is typing...`;
     }
 });
-
-// Send Message Functionality
-async function sendMessage() {
-    const chatInput = document.getElementById('chatInput');
-    const maxLength = 200;
-
-    if (chatInput.value.trim() === '') return; // Ignore empty messages
-    if (chatInput.value.length > maxLength) {
-        alert(`Message exceeds ${maxLength} characters. Please shorten your message.`);
-        return;
-    }
-
-    const message = {
-        userId,
-        userName,
-        text: chatInput.value,
-        timestamp: new Date().toISOString()
-    };
-
-    try {
-        await database.ref('messages').push(message);
-        chatInput.value = ''; // Clear input after sending
-    } catch (error) {
-        console.error('Error sending message:', error);
-    }
-}
-
-// Enter Key Event Listener (Mobile & Desktop)
-chatInput.addEventListener('keydown', function(event) {
-    if (event.key === 'Enter') {
-        sendMessage();
-        event.preventDefault(); // Prevent default line break
-    }
-});
-
-// Generate Random User ID
-function generateRandomId(length = 8) {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
-}
 
 // Save Chat History Locally (Cross-browser support)
 function saveChatHistory() {
@@ -156,35 +698,6 @@ async function clearChat() {
     } catch (error) {
         console.error('Error clearing chat messages:', error);
     }
-}
-
-// Firebase Listener for New Messages
-database.ref('messages').on('child_added', function(snapshot) {
-    const message = snapshot.val();
-    const chatMessages = document.getElementById('chatMessages');
-
-    const messageElement = document.createElement('div');
-    messageElement.className = 'chat-message';
-
-    // Sanitize user input using DOMPurify
-    const sanitizedUserName = DOMPurify.sanitize(message.userName);
-    const sanitizedText = DOMPurify.sanitize(message.text);
-
-    messageElement.innerHTML = `<strong>${sanitizedUserName}:</strong> ${sanitizedText}`;
-
-    const timestamp = document.createElement('span');
-    timestamp.className = 'timestamp';
-    timestamp.innerText = new Date(message.timestamp).toLocaleTimeString();
-
-    messageElement.appendChild(timestamp);
-    chatMessages.appendChild(messageElement);
-    chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll to bottom
-});
-
-// Display Username in Chat
-function displayUserName() {
-    const userNameDisplay = document.getElementById('userNameDisplay');
-    userNameDisplay.innerHTML = `<span class="username-label">Logged in as:</span> <span class="username">${userName}</span>`;
 }
 
 // Toggle Dark Mode
@@ -220,75 +733,6 @@ function toggleFullScreen() {
         document.exitFullscreen().catch(err => console.error('Error exiting full-screen mode:', err));
     }
 }
-
-// WebSocket Handling for Real-Time Viewer Count
-let ws;
-let wsEndpoint;
-
-function connectWebSocket() {
-    if (typeof wsEndpoint === 'undefined') {
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        wsEndpoint = `${wsProtocol}//live-viewer-api.vercel.app`;
-    }
-    
-    ws = new WebSocket(wsEndpoint);
-
-    ws.onopen = () => {
-        console.log('WebSocket connection established');
-    };
-
-    ws.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
-            updateViewerCountUI(data.count);
-        } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
-        }
-    };
-
-    ws.onclose = () => {
-        console.log('WebSocket connection closed. Switching to polling...');
-        fallbackToPolling();
-    };
-
-    ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        fallbackToPolling();
-    };
-}
-
-// Polling Fallback if WebSocket Fails
-function fallbackToPolling() {
-    console.log('Switching to polling...');
-    if (typeof pollingInterval !== 'undefined') {
-        clearInterval(pollingInterval);
-    }
-    
-    // Poll every 10 seconds
-    pollingInterval = setInterval(updateViewerCount, 10000);
-}
-
-// Fallback Polling for Viewer Count
-async function updateViewerCount() {
-    try {
-        const response = await fetch('https://live-viewer-api.vercel.app/viewer-count');
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-        
-        const data = await response.json();
-        updateViewerCountUI(data.count);
-    } catch (error) {
-        console.error('Error fetching viewer count:', error);
-        document.getElementById('viewerCount').innerText = 'Error fetching viewer count.';
-    }
-}
-
-// Update Viewer Count UI
-function updateViewerCountUI(count) {
-    document.getElementById('viewerCount').innerText = `Current Viewers: ${count}`;
-}
-
-// Call connectWebSocket to initiate the WebSocket connection
-connectWebSocket();
 
 function switchPitcher(url) {
     const videoPlayer = document.getElementById('videoPlayer');
