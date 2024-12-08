@@ -1,6 +1,33 @@
 {
   "rules": {
-    ".read": "now < 1730572200000",  // 2024-11-3
-    ".write": "now < 1730572200000",  // 2024-11-3
+    ".read": "now < 1730572200000",  
+    ".write": "now < 1730572200000",  
+    "viewers": {
+      ".read": true,
+      ".write": true
+    },
+    "messages": {
+      ".read": true,
+      ".write": true
+    },
+    "typing": {
+      ".read": true,
+      ".write": true
+    },
+    "users": {
+      "$uid": {
+        ".read": true,
+        ".write": "auth == null || $uid === auth.uid",
+        "userName": {
+          ".validate": "newData.isString() && newData.val().length > 0"
+        },
+        "lastSeen": {
+          ".validate": "newData.isNumber()"
+        },
+        "isOnline": {
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    }
   }
 }
