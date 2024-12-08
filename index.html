@@ -14,14 +14,17 @@
     <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.4/purify.min.js"></script>
     <script src="scripts.js" defer></script>
+    <script src="config.js"></script>
+    
     <script>
         // WebSocket connection with environment-aware URL
-        const wsUrl = window.location.hostname === 'localhost' 
-            ? 'ws://localhost:10000/ws'
-            : 'wss://live-viewer-1feilfyre-mrcool7s-projects.vercel.app/ws';
-            
-        const ws = new WebSocket(wsUrl);
+        const API_URL = 'https://live-viewer-api.vercel.app';
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsEndpoint = `${wsProtocol}//${API_URL.replace(/^https?:\/\//, '')}`;
+        
         let viewerCount = 0;
+
+        const ws = new WebSocket(wsEndpoint);
 
         ws.onopen = () => {
             console.log('Connected to WebSocket server');
@@ -44,7 +47,7 @@
             // Attempt to reconnect after error
             setTimeout(() => {
                 console.log('Attempting to reconnect...');
-                ws = new WebSocket(wsUrl);
+                ws = new WebSocket(wsEndpoint);
             }, 5000);
         };
 
@@ -53,7 +56,7 @@
             // Attempt to reconnect after close
             setTimeout(() => {
                 console.log('Attempting to reconnect...');
-                ws = new WebSocket(wsUrl);
+                ws = new WebSocket(wsEndpoint);
             }, 5000);
         };
     </script>

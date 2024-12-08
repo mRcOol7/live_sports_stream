@@ -1,13 +1,13 @@
 // Firebase Configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyBo9MQw6nMVk0jF3r9zGeRbAJ98SoTLmgc",
-    authDomain: "mechroad-6063c.firebaseapp.com",
-    databaseURL: "https://mechroad-6063c-default-rtdb.firebaseio.com/",
-    projectId: "mechroad-6063c",
-    storageBucket: "mechroad-6063c.appspot.com",
-    messagingSenderId: "758909410801",
-    appId: "1:758909410801:web:f0c9f1961575f7fffa3850",
-    measurementId: "G-ZNLVWBBN13"
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    databaseURL: process.env.FIREBASE_DATABASE_URL,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID,
+    measurementId: process.env.FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
@@ -223,18 +223,27 @@ function toggleFullScreen() {
 
 // WebSocket Handling for Real-Time Viewer Count
 let ws;
+let wsEndpoint;
 
 function connectWebSocket() {
-    ws = new WebSocket('ws://localhost:10000');
+    if (typeof wsEndpoint === 'undefined') {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsEndpoint = `${wsProtocol}//live-viewer-api.vercel.app`;
+    }
+    
+    ws = new WebSocket(wsEndpoint);
 
     ws.onopen = () => {
         console.log('WebSocket connection established');
-        // Optionally, you can send a welcome message or request for data here
     };
 
     ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        updateViewerCountUI(data.count);
+        try {
+            const data = JSON.parse(event.data);
+            updateViewerCountUI(data.count);
+        } catch (error) {
+            console.error('Error parsing WebSocket message:', error);
+        }
     };
 
     ws.onclose = () => {
@@ -251,7 +260,6 @@ function connectWebSocket() {
 // Polling Fallback if WebSocket Fails
 function fallbackToPolling() {
     console.log('Switching to polling...');
-    // Clear existing interval if it exists to prevent multiple intervals
     if (typeof pollingInterval !== 'undefined') {
         clearInterval(pollingInterval);
     }
@@ -263,7 +271,7 @@ function fallbackToPolling() {
 // Fallback Polling for Viewer Count
 async function updateViewerCount() {
     try {
-        const response = await fetch('http://localhost:10000/viewer-count');
+        const response = await fetch('https://live-viewer-api.vercel.app/viewer-count');
         if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
         
         const data = await response.json();
